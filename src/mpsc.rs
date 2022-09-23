@@ -1,14 +1,16 @@
 //! A multi-producer single-receiver channel.
 
-use std::cell::UnsafeCell;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
+use std::pin::Pin;
 use std::rc::Rc;
-use std::task::{Poll, Waker};
+use std::task::{Context, Poll, Waker};
 
 use futures::sink::Sink;
 use futures::stream::{FusedStream, Stream};
 use thiserror::Error;
+
+use crate::cell::UnsafeCell;
 
 /// Error returned by [`try_next`](UnboundedReceiver::try_next).
 #[derive(Error, Debug)]
@@ -44,11 +46,71 @@ struct Inner<T> {
 }
 
 impl<T> Inner<T> {
-    fn close(&mut self) {
+    fn close_impl(&mut self) {
         self.closed = true;
 
         if let Some(ref m) = self.rx_waker {
             m.wake_by_ref();
+        }
+    }
+
+    #[inline]
+    fn try_next_impl(&mut self) -> Result<Option<T>, TryRecvError> {
+        match (self.items.pop_front(), self.closed) {
+            (Some(m), _) => Ok(Some(m)),
+            (None, false) => Ok(None),
+            (None, true) => Err(TryRecvError {
+                _marker: PhantomData,
+            }),
+        }
+    }
+
+    #[inline]
+    fn poll_next_impl(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
+        match (self.items.pop_front(), self.closed) {
+            (Some(m), _) => Poll::Ready(Some(m)),
+            (None, false) => {
+                self.rx_waker = Some(cx.waker().clone());
+                Poll::Pending
+            }
+            (None, true) => Poll::Ready(None),
+        }
+    }
+
+    #[inline]
+    fn is_terminated_impl(&self) -> bool {
+        self.items.is_empty() && self.closed
+    }
+
+    #[inline]
+    fn send_impl(&mut self, item: T) -> Result<(), SendError<T>> {
+        if self.closed {
+            return Err(SendError { inner: item });
+        }
+
+        self.items.push_back(item);
+
+        if let Some(ref m) = self.rx_waker {
+            m.wake_by_ref();
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn pre_clone_sender_impl(&mut self) {
+        self.sender_ctr += 1;
+    }
+
+    #[inline]
+    fn drop_sender_impl(&mut self) {
+        let sender_ctr = {
+            self.sender_ctr -= 1;
+            self.sender_ctr
+        };
+
+        if sender_ctr == 0 {
+            self.close_impl();
         }
     }
 }
@@ -66,7 +128,7 @@ impl<T> UnboundedReceiver<T> {
     /// - `Ok(Some(T))` if a value is ready.
     /// - `Ok(None)` if the channel has become closed.
     /// - `Err(TryRecvError)` if the channel is not closed and the channel is empty.
-    pub fn try_next(&self) -> std::result::Result<Option<T>, TryRecvError> {
+    pub fn try_next(&self) -> Result<Option<T>, TryRecvError> {
         // SAFETY:
         //
         // We can acquire a mutable reference without checking as:
@@ -75,25 +137,14 @@ impl<T> UnboundedReceiver<T> {
         // - This function is not used by any other functions and hence uniquely owns the
         // mutable reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &mut *self.inner.get() };
-
-        match (inner.items.pop_front(), inner.closed) {
-            (Some(m), _) => Ok(Some(m)),
-            (None, false) => Ok(None),
-            (None, true) => Err(TryRecvError {
-                _marker: PhantomData,
-            }),
-        }
+        unsafe { self.inner.with_mut(|inner| inner.try_next_impl()) }
     }
 }
 
 impl<T> Stream for UnboundedReceiver<T> {
     type Item = T;
 
-    fn poll_next(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // SAFETY:
         //
         // We can acquire a mutable reference without checking as:
@@ -102,16 +153,7 @@ impl<T> Stream for UnboundedReceiver<T> {
         // - This function is not used by any other functions and hence uniquely owns the
         // mutable reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &mut *self.inner.get() };
-
-        match (inner.items.pop_front(), inner.closed) {
-            (Some(m), _) => Poll::Ready(Some(m)),
-            (None, false) => {
-                inner.rx_waker = Some(cx.waker().clone());
-                Poll::Pending
-            }
-            (None, true) => Poll::Ready(None),
-        }
+        unsafe { self.inner.with_mut(|inner| inner.poll_next_impl(cx)) }
     }
 }
 
@@ -125,8 +167,7 @@ impl<T> FusedStream for UnboundedReceiver<T> {
         // - This function is not used by any other functions and hence uniquely owns the
         // mutable reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &*self.inner.get() };
-        inner.items.is_empty() && inner.closed
+        unsafe { self.inner.with(|inner| inner.is_terminated_impl()) }
     }
 }
 
@@ -140,8 +181,7 @@ impl<T> Drop for UnboundedReceiver<T> {
         // - This function is not used by any other functions and hence uniquely owns the
         // mutable reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &mut *self.inner.get() };
-        inner.close();
+        unsafe { self.inner.with_mut(|inner| inner.close_impl()) }
     }
 }
 
@@ -162,19 +202,8 @@ impl<T> UnboundedSender<T> {
         // - This function is not used by any function that have already acquired a mutable
         // reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &mut *self.inner.get() };
 
-        if inner.closed {
-            return Err(SendError { inner: item });
-        }
-
-        inner.items.push_back(item);
-
-        if let Some(ref m) = inner.rx_waker {
-            m.wake_by_ref();
-        }
-
-        Ok(())
+        unsafe { self.inner.with_mut(move |inner| inner.send_impl(item)) }
     }
 
     /// Closes the channel.
@@ -189,17 +218,12 @@ impl<T> UnboundedSender<T> {
         // - This function is not used by any function that have already acquired a mutable
         // reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &mut *self.inner.get() };
-        inner.close();
+        unsafe { self.inner.with_mut(|inner| inner.close_impl()) }
     }
 }
 
 impl<T> Clone for UnboundedSender<T> {
     fn clone(&self) -> Self {
-        let self_ = Self {
-            inner: self.inner.clone(),
-        };
-
         // SAFETY:
         //
         // We can acquire a mutable reference without checking as:
@@ -208,10 +232,11 @@ impl<T> Clone for UnboundedSender<T> {
         // - This function is not used by any other functions and hence uniquely owns the
         // mutable reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &mut *self.inner.get() };
-        inner.sender_ctr += 1;
+        unsafe { self.inner.with_mut(|inner| inner.pre_clone_sender_impl()) }
 
-        self_
+        Self {
+            inner: self.inner.clone(),
+        }
     }
 }
 
@@ -225,16 +250,7 @@ impl<T> Drop for UnboundedSender<T> {
         // - This function is not used by any other functions and hence uniquely owns the
         // mutable reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &mut *self.inner.get() };
-
-        let sender_ctr = {
-            inner.sender_ctr -= 1;
-            inner.sender_ctr
-        };
-
-        if sender_ctr == 0 {
-            inner.close();
-        }
+        unsafe { self.inner.with_mut(|inner| inner.drop_sender_impl()) }
     }
 }
 
@@ -251,8 +267,9 @@ impl<T> Sink<T> for &'_ UnboundedSender<T> {
         self: std::pin::Pin<&mut Self>,
         _cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), Self::Error>> {
-        let inner = unsafe { &*self.inner.get() };
-        match inner.closed {
+        let closed = unsafe { self.inner.with(|inner| inner.closed) };
+
+        match closed {
             false => Poll::Ready(Ok(())),
             true => Poll::Ready(Err(TrySendError {
                 _marker: PhantomData,
@@ -307,12 +324,11 @@ mod tests {
 
     use futures::sink::SinkExt;
     use futures::stream::StreamExt;
-    use tokio::task::LocalSet;
+    use tokio::task::{spawn_local, LocalSet};
     use tokio::test;
+    use tokio::time::sleep;
 
     use super::*;
-    use tokio::task::spawn_local;
-    use tokio::time::sleep;
 
     #[test]
     async fn mpsc_works() {

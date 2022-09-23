@@ -1,12 +1,13 @@
 //! A one-time send - receive channel.
 
-use std::cell::UnsafeCell;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::task::{Poll, Waker};
 
 use thiserror::Error;
+
+use crate::cell::UnsafeCell;
 
 /// Error returned by awaiting the [`Receiver`].
 #[derive(Debug, Error)]
@@ -23,6 +24,53 @@ struct Inner<T> {
 
     // This type is not send or sync.
     _marker: PhantomData<Rc<()>>,
+}
+
+impl<T> Inner<T> {
+    #[inline]
+    fn poll_impl(&mut self, cx: &mut std::task::Context<'_>) -> Poll<Result<T, RecvError>> {
+        // Implementation Note:
+        //
+        // It might be nicer to use a match pattern here.
+        // However, this will slow down the polling process by 10%.
+        if let Some(m) = self.item.take() {
+            return Poll::Ready(Ok(m));
+        }
+
+        if self.closed {
+            return Poll::Ready(Err(RecvError {
+                _marker: PhantomData,
+            }));
+        }
+
+        self.rx_waker = Some(cx.waker().clone());
+        Poll::Pending
+    }
+
+    #[inline]
+    fn send_impl(&mut self, item: T) -> Result<(), T> {
+        if self.closed {
+            return Err(item);
+        }
+
+        self.item = Some(item);
+
+        if let Some(ref m) = self.rx_waker {
+            m.wake_by_ref();
+        }
+
+        Ok(())
+    }
+
+    fn close_impl(&mut self, wake_recv: bool) {
+        self.closed = true;
+
+        if wake_recv && self.item.is_none() {
+            if let Some(ref m) = self.rx_waker {
+                m.wake_by_ref();
+            }
+        }
+    }
 }
 
 /// The receiver of a oneshot channel.
@@ -43,25 +91,7 @@ impl<T> Future for Receiver<T> {
         // - This function is not used by any other functions and hence uniquely owns the
         // mutable reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &mut *self.inner.get() };
-
-        // Implementation Note:
-        //
-        // It might be neater to use a match pattern here.
-        // However, this will slow down the polling process by 10%.
-
-        if let Some(m) = inner.item.take() {
-            return Poll::Ready(Ok(m));
-        }
-
-        if inner.closed {
-            return Poll::Ready(Err(RecvError {
-                _marker: PhantomData,
-            }));
-        }
-
-        inner.rx_waker = Some(cx.waker().clone());
-        Poll::Pending
+        unsafe { self.inner.with_mut(|inner| inner.poll_impl(cx)) }
     }
 }
 
@@ -75,8 +105,7 @@ impl<T> Drop for Receiver<T> {
         // - This function is not used by any other functions and hence uniquely owns the
         // mutable reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &mut *self.inner.get() };
-        inner.closed = true;
+        unsafe { self.inner.with_mut(|inner| inner.close_impl(false)) }
     }
 }
 
@@ -97,19 +126,7 @@ impl<T> Sender<T> {
         // - This function is not used by any other functions and hence uniquely owns the
         // mutable reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &mut *self.inner.get() };
-
-        if inner.closed {
-            return Err(item);
-        }
-
-        inner.item = Some(item);
-
-        if let Some(ref m) = inner.rx_waker {
-            m.wake_by_ref();
-        }
-
-        Ok(())
+        unsafe { self.inner.with_mut(move |inner| inner.send_impl(item)) }
     }
 }
 
@@ -123,15 +140,7 @@ impl<T> Drop for Sender<T> {
         // - This function is not used by any other functions and hence uniquely owns the
         // mutable reference.
         // - The mutable reference is dropped at the end of this function.
-        let inner = unsafe { &mut *self.inner.get() };
-
-        inner.closed = true;
-
-        if inner.item.is_none() {
-            if let Some(ref m) = inner.rx_waker {
-                m.wake_by_ref();
-            }
-        }
+        unsafe { self.inner.with_mut(|inner| inner.close_impl(true)) }
     }
 }
 
@@ -159,12 +168,11 @@ mod tests {
     use std::time::Duration;
 
     use tokio::sync::Barrier;
-    use tokio::task::LocalSet;
+    use tokio::task::{spawn_local, LocalSet};
     use tokio::test;
+    use tokio::time::sleep;
 
     use super::*;
-    use tokio::task::spawn_local;
-    use tokio::time::sleep;
 
     #[test]
     async fn oneshot_works() {
