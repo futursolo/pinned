@@ -58,8 +58,8 @@ impl<T> Inner<T> {
     fn try_next_impl(&mut self) -> Result<Option<T>, TryRecvError> {
         match (self.items.pop_front(), self.closed) {
             (Some(m), _) => Ok(Some(m)),
-            (None, false) => Ok(None),
-            (None, true) => Err(TryRecvError {
+            (None, true) => Ok(None),
+            (None, false) => Err(TryRecvError {
                 _marker: PhantomData,
             }),
         }
