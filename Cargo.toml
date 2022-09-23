@@ -1,0 +1,24 @@
+[package]
+name = "pinned"
+version = "0.1.0"
+edition = "2021"
+repository = "https://github.com/futursolo/pinned"
+authors = [
+    "Kaede Hoshiakwa <futursolo@icloud.com>",
+]
+description = "Synchronisation primitives for !Send tasks."
+keywords = ["async", "futures", "non-blocking"]
+categories = ["asynchronous"]
+readme = "README.md"
+homepage = "https://github.com/futursolo/pinned"
+license = "MIT OR Apache-2.0"
+rust-version = "1.60.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures = { version = "0.3.24", default-features = false, features = ["std"] }
+thiserror = "1.0.35"
+
+[dev-dependencies]
+tokio = { version = "1.21.1", features = ["full"] }
