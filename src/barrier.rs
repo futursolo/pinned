@@ -89,9 +89,6 @@ impl Inner {
 #[derive(Debug)]
 pub struct Barrier {
     inner: UnsafeCell<Inner>,
-
-    // This type is not send or sync.
-    _marker: PhantomData<*const ()>,
 }
 
 impl Barrier {
@@ -107,8 +104,6 @@ impl Barrier {
 
                 _marker: PhantomData,
             }),
-
-            _marker: PhantomData,
         }
     }
 

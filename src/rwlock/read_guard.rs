@@ -28,12 +28,10 @@ where
         F: FnOnce(&T) -> &U,
         U: ?Sized,
     {
-        let read_inner = Ref::map(this.val, f);
+        let Self { wake_guard, val } = this;
 
-        RwLockReadGuard {
-            wake_guard: this.wake_guard,
-            val: read_inner,
-        }
+        let val = Ref::map(val, f);
+        RwLockReadGuard { wake_guard, val }
     }
 
     /// Tries to make a new `RwLockReadGuard` for a component of the locked data. Returns the
@@ -52,15 +50,11 @@ where
         F: FnOnce(&T) -> Option<&U>,
         U: ?Sized,
     {
-        match Ref::filter_map(this.val, f) {
-            Ok(val) => Ok(RwLockReadGuard {
-                wake_guard: this.wake_guard,
-                val,
-            }),
-            Err(val) => Err(RwLockReadGuard {
-                wake_guard: this.wake_guard,
-                val,
-            }),
+        let Self { wake_guard, val } = this;
+
+        match Ref::filter_map(val, f) {
+            Ok(val) => Ok(RwLockReadGuard { wake_guard, val }),
+            Err(val) => Err(RwLockReadGuard { wake_guard, val }),
         }
     }
 }
