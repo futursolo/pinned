@@ -3,7 +3,9 @@ use std::result;
 
 use thiserror::Error;
 
-/// Error returned from the [`RwLock::try_read`] and [`RwLock::try_write`] functions.
+/// Error returned from the [`RwLock::try_read`](super::RwLock::try_read) and
+/// [`RwLock::try_write`](super::RwLock::try_write)
+/// functions.
 ///
 /// `RwLock::try_read` operation will only fail if the lock is currently held by an exclusive
 /// writer.

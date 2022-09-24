@@ -5,7 +5,7 @@ use super::wakers::WakeGuard;
 
 /// RAII structure used to release the shared read access of a lock when dropped.
 ///
-/// This structure is created by the [`read`] method on [`RwLock`].
+/// This structure is created by the `read` method on [`RwLock`](super::RwLock).
 #[derive(Debug)]
 pub struct RwLockReadGuard<'a, T: ?Sized> {
     pub(super) wake_guard: WakeGuard<'a>,

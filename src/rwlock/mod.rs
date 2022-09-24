@@ -86,7 +86,7 @@ where
         Poll::Pending
     }
 
-    /// Locks the current [`RwLock`] with shared read access, causing the current task to yield
+    /// Locks the current `RwLock` with shared read access, causing the current task to yield
     /// until the lock has been acquired.
     ///
     /// This method does not provide any guarantees with respect to the ordering of whether
@@ -107,7 +107,7 @@ where
         Poll::Pending
     }
 
-    /// Locks the current [`RwLock`] with exclusive write access, causing the current task to yield
+    /// Locks the current `RwLock` with exclusive write access, causing the current task to yield
     /// until the lock has been acquired.
     ///
     /// This method does not provide any guarantees with respect to the ordering of whether

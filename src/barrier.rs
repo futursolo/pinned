@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 use crate::cell::UnsafeCell;
 use crate::oneshot;
 
-/// A `BarrierWaitResult` is returned by [`wait`] when all tasks in the [`Barrier`] have
-/// rendezvoused.
+/// A `BarrierWaitResult` is returned by [`wait`](Barrier::wait) when all tasks in the [`Barrier`]
+/// have rendezvoused.
 #[derive(Clone, Debug)]
 pub struct BarrierWaitResult(bool);
 

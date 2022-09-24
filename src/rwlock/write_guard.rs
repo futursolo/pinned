@@ -5,7 +5,7 @@ use super::wakers::WakeGuard;
 
 /// RAII structure used to release the exclusive write access of a lock when dropped.
 ///
-/// This structure is created by the [`write`] method on [`RwLock`].
+/// This structure is created by the `write` method on [`RwLock`](super::RwLock).
 #[derive(Debug)]
 pub struct RwLockWriteGuard<'a, T: ?Sized> {
     pub(super) wake_guard: WakeGuard<'a>,
