@@ -14,5 +14,7 @@ mod barrier;
 mod cell;
 pub mod mpsc;
 pub mod oneshot;
+mod rwlock;
 
 pub use barrier::*;
+pub use rwlock::*;
