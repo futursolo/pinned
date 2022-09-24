@@ -13,6 +13,39 @@ use wakers::Wakers;
 pub use write_guard::*;
 
 /// An asynchronous reader-writer lock.
+///
+/// This type of lock allows a number of readers or at most one writer at any point in time. The
+/// write portion of this lock typically allows modification of the underlying data (exclusive
+/// access) and the read portion of this lock typically allows for read-only access (shared access).
+///
+/// The acquisition order of this lock is not guaranteed and depending on the runtime's
+/// implementation and preference of any used polling combinators. This implementation will
+/// allow the first polled task to acquire the lock after the lock is released.
+///
+/// # Examples
+///
+/// ```
+/// # #[tokio::main]
+/// # async fn main() {
+/// # use pinned::RwLock;
+/// let lock = RwLock::new(5);
+///
+/// // many reader locks can be held at once
+/// {
+///     let r1 = lock.read().await;
+///     let r2 = lock.read().await;
+///     assert_eq!(*r1, 5);
+///     assert_eq!(*r2, 5);
+/// } // read locks are dropped at this point
+///
+/// // only one write lock may be held, however
+/// {
+///     let mut w = lock.write().await;
+///     *w += 1;
+///     assert_eq!(*w, 6);
+/// } // write lock is dropped here
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct RwLock<T: ?Sized> {
     wakers: Wakers,

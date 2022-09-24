@@ -54,10 +54,9 @@ impl Inner {
 /// # async fn main() {
 /// # let local_set = tokio::task::LocalSet::new();
 /// # local_set.run_until(async {
-/// use std::rc::Rc;
-///
-/// use pinned::Barrier;
-///
+/// # use std::rc::Rc;
+/// # use pinned::Barrier;
+/// #
 /// let mut handles = Vec::with_capacity(10);
 /// let barrier = Rc::new(Barrier::new(10));
 /// for _ in 0..10 {

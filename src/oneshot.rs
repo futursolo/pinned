@@ -1,4 +1,4 @@
-//! A one-time send - receive channel.
+//! A channel that can pass one single value from a sender to a receiver.
 
 use std::future::Future;
 use std::marker::PhantomData;
