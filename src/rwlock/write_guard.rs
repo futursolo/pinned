@@ -42,6 +42,9 @@ where
     /// This is an associated function that needs to be used as `RwLockWriteGuard::filter_map(...)`.
     /// A method would interfere with methods of the same name on the contents of the underlying
     /// data used through `Deref`.
+    ///
+    /// This function is not available before Rust 1.63.
+    #[rustversion::since(1.63)]
     pub fn filter_map<U, F>(
         this: RwLockWriteGuard<'a, T>,
         f: F,
