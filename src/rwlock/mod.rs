@@ -3,6 +3,8 @@ use std::task::{Context, Poll};
 
 use futures::future::poll_fn;
 
+use crate::utils::yield_now;
+
 mod error;
 mod read_guard;
 mod wakers;
@@ -19,8 +21,7 @@ pub use write_guard::*;
 /// access) and the read portion of this lock typically allows for read-only access (shared access).
 ///
 /// The acquisition order of this lock is not guaranteed and depending on the runtime's
-/// implementation and preference of any used polling combinators. This implementation will
-/// allow the first polled task to acquire the lock after the lock is released.
+/// implementation and preference of any used polling combinators.
 ///
 /// # Examples
 ///
@@ -127,6 +128,9 @@ where
     ///
     /// Returns an RAII guard which will release this task's shared access once it is dropped.
     pub async fn read(&self) -> RwLockReadGuard<'_, T> {
+        // We yield to provide some fairness over the current runtime / polling combinator so that
+        // one task is not starving the lock.
+        yield_now().await;
         poll_fn(|cx| self.poll_read(cx)).await
     }
 
@@ -148,6 +152,9 @@ where
     ///
     /// Returns an RAII guard which will drop the write access once it is dropped.
     pub async fn write(&self) -> RwLockWriteGuard<'_, T> {
+        // We yield to provide some fairness over the current runtime / polling combinator so that
+        // one task is not starving the lock.
+        yield_now().await;
         poll_fn(|cx| self.poll_write(cx)).await
     }
 

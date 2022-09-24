@@ -23,6 +23,7 @@ mod cell;
 pub mod mpsc;
 pub mod oneshot;
 mod rwlock;
+mod utils;
 
 pub use barrier::*;
 pub use rwlock::*;
