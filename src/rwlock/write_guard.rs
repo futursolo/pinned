@@ -9,6 +9,7 @@ use super::wakers::WakeGuard;
 #[derive(Debug)]
 pub struct RwLockWriteGuard<'a, T: ?Sized> {
     pub(super) wake_guard: WakeGuard<'a>,
+    // nightly: #[allow(must_not_suspend)]
     pub(super) val: RefMut<'a, T>,
 }
 

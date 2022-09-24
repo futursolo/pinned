@@ -31,6 +31,14 @@ impl Wakers {
     }
 
     pub fn push(&self, w: Waker) {
+        // SAFETY:
+        //
+        // We can acquire a mutable reference without checking as:
+        //
+        // - This type is !Sync and !Send.
+        // - This function is not used by any other functions and hence uniquely owns the
+        // mutable reference.
+        // - The mutable reference is dropped at the end of this function.
         unsafe {
             self.inner.with_mut(move |inner| inner.push(w));
         }
@@ -41,6 +49,14 @@ impl Wakers {
     }
 
     pub fn wake_all(&self) {
+        // SAFETY:
+        //
+        // We can acquire a mutable reference without checking as:
+        //
+        // - This type is !Sync and !Send.
+        // - This function is not used by any other functions and hence uniquely owns the
+        // mutable reference.
+        // - The mutable reference is dropped at the end of this function.
         unsafe {
             self.inner.with_mut(|inner| {
                 for waker in inner.drain(..) {

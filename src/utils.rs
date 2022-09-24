@@ -3,7 +3,7 @@ use std::task::Poll;
 
 use futures::future::poll_fn;
 
-/// Skip 1 round of execution.
+/// Skip one round of execution.
 pub(crate) async fn yield_now() {
     let yielded = Cell::new(false);
 

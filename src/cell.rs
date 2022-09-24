@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 ///
 /// Inspired by tokio::loom::cell::UnsafeCell.
 ///
-/// This type provides additional protections:
+/// This type provides additional protections over std::cell::UnsafeCell:
 ///
 /// - Using await statements without releasing the reference.
 /// - Attempting to return the reference.
