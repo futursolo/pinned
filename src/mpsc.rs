@@ -1,4 +1,13 @@
 //! A multi-producer, single-receiver channel.
+//!
+//! This is an asynchronous, `!Send` version of `std::sync::mpsc`. Currently only the unbounded
+//! variant is implemented.
+//!
+//! [`UnboundedReceiver`] implements [`Stream`] and allows asynchronous tasks to read values out of
+//! the channel. The `UnboundedReceiver` Stream will suspend and wait for available values if the
+//! current queue is empty. [`UnboundedSender`] implements [`Sink`] and allows messages to be sent
+//! to the corresponding `UnboundedReceiver`. The `UnboundedReceiver` also implements a
+//! [`send_now`](UnboundedSender::send_now) method to send a value synchronously.
 
 use std::collections::VecDeque;
 use std::marker::PhantomData;
@@ -116,6 +125,8 @@ impl<T> Inner<T> {
 }
 
 /// The receiver of an unbounded mpsc channel.
+///
+/// This is created by the [`unbounded`] function.
 #[derive(Debug)]
 pub struct UnboundedReceiver<T> {
     inner: Rc<UnsafeCell<Inner<T>>>,
@@ -138,6 +149,23 @@ impl<T> UnboundedReceiver<T> {
         // mutable reference.
         // - The mutable reference is dropped at the end of this function.
         unsafe { self.inner.with_mut(|inner| inner.try_next_impl()) }
+    }
+
+    /// Closes the receiver of the channel without dropping it.
+    ///
+    /// This prevents any further messages from being sent on the channel while still enabling the
+    /// receiver to drain messages in the buffer.
+    pub fn close(&self) {
+        // SAFETY:
+        //
+        // We can acquire a mutable reference without checking as:
+        //
+        // - This type is !Sync and !Send.
+        // - This function is not used by any other functions and hence uniquely owns the
+        // mutable reference.
+        // - The mutable reference is dropped at the end of this function.
+
+        unsafe { self.inner.with_mut(|inner| inner.close_impl()) }
     }
 }
 
@@ -186,6 +214,8 @@ impl<T> Drop for UnboundedReceiver<T> {
 }
 
 /// The sender of an unbounded mpsc channel.
+///
+/// This value is created by the [`unbounded`] function.
 #[derive(Debug)]
 pub struct UnboundedSender<T> {
     inner: Rc<UnsafeCell<Inner<T>>>,
@@ -193,6 +223,9 @@ pub struct UnboundedSender<T> {
 
 impl<T> UnboundedSender<T> {
     /// Sends a value to the unbounded receiver.
+    ///
+    /// This is an unbounded sender, so this function differs from [`Sink::send`] by ensuring the
+    /// return type reflects that the channel is always ready to receive messages.
     pub fn send_now(&self, item: T) -> Result<(), SendError<T>> {
         // SAFETY:
         //
@@ -295,6 +328,9 @@ impl<T> Sink<T> for &'_ UnboundedSender<T> {
 }
 
 /// Creates an unbounded channel.
+///
+/// The `send` method on Senders created by this function will always succeed and return immediately
+/// as long as the channel is open.
 ///
 /// # Note
 ///

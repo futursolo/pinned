@@ -9,7 +9,9 @@ use super::wakers::WakeGuard;
 #[derive(Debug)]
 pub struct RwLockWriteGuard<'a, T: ?Sized> {
     pub(super) wake_guard: WakeGuard<'a>,
-    // nightly: #[allow(must_not_suspend)]
+    // RefMut has a must_not_suspend notation. However, this lint is unlikely to be enabled in the
+    // foreseeable future. When it becomes enabled, we can vendor a version of RefCell without the
+    // lint.
     pub(super) val: RefMut<'a, T>,
 }
 
