@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::cell::UnsafeCell;
 
-/// Error returned by awaiting the [`Receiver`].
+/// Error returned when the channel is closed before a value is sent to the [`Receiver`].
 #[derive(Debug, Error)]
 #[error("channel has been closed.")]
 pub struct RecvError {
@@ -74,6 +74,8 @@ impl<T> Inner<T> {
 }
 
 /// The receiver of a oneshot channel.
+///
+/// This type has no recv method. To receive the value, `await` the receiver.
 #[derive(Debug)]
 pub struct Receiver<T> {
     inner: Rc<UnsafeCell<Inner<T>>>,
