@@ -224,8 +224,9 @@ pub struct UnboundedSender<T> {
 impl<T> UnboundedSender<T> {
     /// Sends a value to the unbounded receiver.
     ///
-    /// This is an unbounded sender, so this function differs from [`Sink::send`] by ensuring the
-    /// return type reflects that the channel is always ready to receive messages.
+    /// This is an unbounded sender, so this function differs from
+    /// [`SinkExt::send`](futures::sink::SinkExt::send) by ensuring the return type reflects
+    /// that the channel is always ready to receive messages.
     pub fn send_now(&self, item: T) -> Result<(), SendError<T>> {
         // SAFETY:
         //
