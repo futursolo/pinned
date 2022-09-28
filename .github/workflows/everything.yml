@@ -24,13 +24,6 @@ jobs:
       - name: Restore Rust Cache
         uses: Swatinem/rust-cache@v1
 
-      - name: Setup Rust wasm
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          profile: minimal
-
       - name: Run Lints
         uses: actions-rs/clippy-check@v1
         with:
