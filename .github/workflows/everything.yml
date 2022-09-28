@@ -25,10 +25,15 @@ jobs:
         uses: Swatinem/rust-cache@v1
 
       - name: Run Lints
+        if: github.event_name == 'push'
         uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features
+
+      - name: Run Lints (PR)
+        if: github.event_name == 'pull_request'
+        run: cargo clippy --all-features
 
   test:
     name: Run Tests
