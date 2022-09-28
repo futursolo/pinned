@@ -19,7 +19,7 @@ rust-version = "1.60.0"
 [dependencies]
 futures = { version = "0.3.24", default-features = false, features = ["std", "async-await"] }
 rustversion = "1.0.9"
-thiserror = "1.0.35"
+thiserror = "1.0.37"
 
 [dev-dependencies]
 tokio = { version = "1.21.1", features = ["full"] }
