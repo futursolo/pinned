@@ -22,4 +22,4 @@ rustversion = "1.0.9"
 thiserror = "1.0.35"
 
 [dev-dependencies]
-tokio = { version = "1.21.1", features = ["full"] }
+tokio = { version = "1.21.2", features = ["full"] }
