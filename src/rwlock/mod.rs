@@ -1,5 +1,5 @@
-use std::cell::RefCell;
-use std::task::{Context, Poll};
+use std::cell::{Cell, RefCell};
+use std::task::Poll;
 
 use futures::future::poll_fn;
 
@@ -110,14 +110,21 @@ where
         })
     }
 
-    fn poll_read(&self, cx: &mut Context<'_>) -> Poll<RwLockReadGuard<'_, T>> {
-        if let Ok(m) = self.try_read() {
-            return Poll::Ready(m);
-        }
+    /// Wait for the next lock release.
+    async fn wait(&self) {
+        let awaited = Cell::new(false);
 
-        self.wakers.push(cx.waker().clone());
+        poll_fn(move |cx| {
+            if awaited.get() {
+                return Poll::Ready(());
+            }
 
-        Poll::Pending
+            awaited.set(true);
+
+            self.wakers.push(cx.waker().clone());
+            Poll::Pending
+        })
+        .await;
     }
 
     /// Locks the current `RwLock` with shared read access, causing the current task to yield
@@ -131,17 +138,13 @@ where
         // We yield to provide some fairness over the current runtime / polling combinator so that
         // one task is not starving the lock.
         yield_now().await;
-        poll_fn(|cx| self.poll_read(cx)).await
-    }
 
-    fn poll_write(&self, cx: &mut Context<'_>) -> Poll<RwLockWriteGuard<'_, T>> {
-        if let Ok(m) = self.try_write() {
-            return Poll::Ready(m);
+        loop {
+            if let Ok(m) = self.try_read() {
+                return m;
+            }
+            self.wait().await;
         }
-
-        self.wakers.push(cx.waker().clone());
-
-        Poll::Pending
     }
 
     /// Locks the current `RwLock` with exclusive write access, causing the current task to yield
@@ -155,7 +158,13 @@ where
         // We yield to provide some fairness over the current runtime / polling combinator so that
         // one task is not starving the lock.
         yield_now().await;
-        poll_fn(|cx| self.poll_write(cx)).await
+
+        loop {
+            if let Ok(m) = self.try_write() {
+                return m;
+            }
+            self.wait().await;
+        }
     }
 
     /// Returns a mutable reference to the underlying data.
