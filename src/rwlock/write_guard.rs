@@ -48,10 +48,7 @@ where
     ///
     /// This function is not available before Rust 1.63.
     #[rustversion::since(1.63)]
-    pub fn filter_map<U, F>(
-        this: RwLockWriteGuard<'a, T>,
-        f: F,
-    ) -> Result<RwLockWriteGuard<'a, U>, Self>
+    pub fn filter_map<U, F>(this: Self, f: F) -> Result<RwLockWriteGuard<'a, U>, Self>
     where
         F: FnOnce(&mut T) -> Option<&mut U>,
         U: ?Sized,

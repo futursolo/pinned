@@ -11,7 +11,7 @@ pub struct BarrierWaitResult(bool);
 impl BarrierWaitResult {
     /// Returns `true` if this task from wait is the "leader task".
     ///
-    /// Only one task will have `true` returned from their result, all other threads will have
+    /// Only one task will have `true` returned from their result, all other tasks will have
     /// `false` returned.
     pub fn is_leader(&self) -> bool {
         self.0
@@ -164,7 +164,7 @@ mod tests {
                     });
                 }
 
-                // At this point, all spawned threads should be blocked,
+                // At this point, all spawned tasks should be blocked,
                 // so we shouldn't get anything from the port
                 assert!(rx.try_next().is_err());
 

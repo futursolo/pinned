@@ -10,7 +10,8 @@ use thiserror::Error;
 /// `RwLock::try_read` operation will only fail if the lock is currently held by an exclusive
 /// writer.
 ///
-/// `RwLock::try_write` operation will if lock is held by any reader or by an exclusive writer.
+/// `RwLock::try_write` operation will fail if the lock is held by any reader or by an exclusive
+/// writer.
 #[derive(Debug, Error)]
 #[error("this operation would block.")]
 pub struct TryLockError(PhantomData<()>);

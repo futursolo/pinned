@@ -48,10 +48,7 @@ where
     ///
     /// This function is not available before Rust 1.63.
     #[rustversion::since(1.63)]
-    pub fn filter_map<U, F>(
-        this: RwLockReadGuard<'a, T>,
-        f: F,
-    ) -> Result<RwLockReadGuard<'a, U>, Self>
+    pub fn filter_map<U, F>(this: Self, f: F) -> Result<RwLockReadGuard<'a, U>, Self>
     where
         F: FnOnce(&T) -> Option<&U>,
         U: ?Sized,
